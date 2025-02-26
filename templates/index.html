@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Perplexity 가격 검색 도구</title>
+</head>
+<body>
+    <h1>Perplexity 가격 검색 도구</h1>
+    <form action="/" method="post" enctype="multipart/form-data">
+        <label for="excel_file">상품 목록 엑셀 파일:</label>
+        <input type="file" name="excel_file" id="excel_file" accept=".xlsx, .xls" required><br><br>
+        
+        <label for="output_filename">출력 파일명:</label>
+        <input type="text" name="output_filename" id="output_filename" value="price_results.xlsx" required><br><br>
+        
+        <label for="model">모델 선택:</label>
+        <select name="model" id="model">
+            <option value="sonar">sonar</option>
+            <option value="sonar-pro">sonar-pro</option>
+        </select><br><br>
+        
+        <label for="system_prompt">System Prompt:</label><br>
+        <textarea name="system_prompt" id="system_prompt" rows="10" cols="60">**BEGIN JSON ONLY INSTRUCTION**
+You are a helpful assistant that provides price information.  Your response MUST be valid JSON and nothing else.  Do NOT include any conversational text, only JSON. Return results in the following JSON structure, filling in the values.  Prices MUST be in Korean Won (KRW), including VAT (Value Added Tax).  If a price is not available or if it's unclear whether VAT is included, use `null`. If possible, include commas as thousands separators (e.g., '1,947,000원'). Search for prices on Korean online shopping sites. If a value cannot be found, fill it with `null`. Ensure all fields, including numeric price fields, are properly formatted according to JSON syntax (e.g., with commas separating key-value pairs).
+```json
+{
+  "highest_price": 1299,
+  "highest_price_product": "Example Product",
+  "highest_price_source": "Example Source",
+  "highest_price_url": "https://www.example.com",
+  "lowest_price": 999,
+  "lowest_price_product": "Example Product 2",
+  "lowest_price_source": "Example Source 2",
+  "lowest_price_url": "https://www.example.com/2"
+}
+**END JSON ONLY INSTRUCTION**</textarea><br><br>
+    <button type="submit">검색 시작</button>
+</form>
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul>
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+</body> </html>
