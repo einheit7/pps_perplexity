@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Perplexity 가격 검색 도구</title>
+    <style>
+        body { font-family: sans-serif; }
+        label { display: block; margin-bottom: 5px; }
+        input[type="text"], textarea, select { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+        button { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        ul.messages { list-style: none; padding: 0; color: red; }
+    </style>
+</head>
+<body>
+    <h1>Perplexity 가격 검색 도구</h1>
+    <form action="/" method="post" enctype="multipart/form-data">
+        <label for="excel_file">상품 목록 엑셀 파일:</label>
+        <input type="file" name="excel_file" id="excel_file" accept=".xlsx, .xls" required>
+
+        <label for="output_filename">출력 파일명:</label>
+        <input type="text" name="output_filename" id="output_filename" value="price_results.xlsx" required>
+
+        <label for="model">모델 선택:</label>
+        <select name="model" id="model">
+            <option value="sonar">sonar</option>
+            <option value="sonar-pro">sonar-pro</option>
+        </select>
+
+        <label for="system_prompt">System Prompt:</label>
+        <textarea name="system_prompt" id="system_prompt" rows="10" cols="60">{{ default_system_prompt }}</textarea>
+
+        <button type="submit">검색 시작</button>
+    </form>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul class="messages">
+          {% for message in messages %}
+            <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+</body>
+</html>
