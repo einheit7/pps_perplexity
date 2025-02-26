@@ -31,18 +31,22 @@
         <label for="system_prompt">System Prompt:</label>
         <textarea name="system_prompt" id="system_prompt" rows="5" cols="60"></textarea><br>
 
-
+        <!-- System Prompt 업로드/다운로드 버튼 -->
+        <button type="button" onclick="uploadPromptFile()">Prompt 파일 업로드</button>
+        <button type="button" onclick="downloadPromptFile()">Prompt 파일 다운로드</button>
     </form>
+
     <button type="button" onclick="startSearch()">조사 시작</button>
-     <button id="download-btn" style="display: none;">결과 파일 다운로드</button>
+    <button id="download-btn" style="display: none;">결과 파일 다운로드</button>
 
     <h2>진행 상황</h2>
     <pre id="logArea"></pre>
 
     <script>
-        let filePath = null; // 업로드된 파일 경로 저장
+        let filePath = null;
 
         function uploadFile() {
+            // ... (이전 코드와 동일) ...
             let formData = new FormData();
             let fileInput = document.getElementById("fileInput");
             formData.append("file", fileInput.files[0]);
@@ -54,13 +58,14 @@
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                filePath = data.file_path; // 서버에서 반환한 파일 경로 저장
+                filePath = data.file_path; // 서버에서 반환된 파일 경로 저장
             })
             .catch(error => alert("오류 발생: " + error));
         }
 
         function startSearch() {
-            if (!filePath) {
+            // ... (이전 코드와 동일) ...
+             if (!filePath) {
                 alert("먼저 파일을 업로드해주세요.");
                 return;
             }
@@ -90,14 +95,15 @@
         }
 
         function startLogStreaming() {
+            // ... (이전 코드와 동일) ...
             const logArea = document.getElementById("logArea");
             logArea.innerHTML = "검색 진행 중...\n";
 
-            const eventSource = new EventSource('/logs'); // SSE 연결
+            const eventSource = new EventSource('/logs');
 
             eventSource.onmessage = function(event) {
-                logArea.innerHTML += event.data;  // 로그 메시지 추가
-                logArea.scrollTop = logArea.scrollHeight; // 스크롤 맨 아래로
+                logArea.innerHTML += event.data;
+                logArea.scrollTop = logArea.scrollHeight;
             };
 
             eventSource.onerror = function(event) {
@@ -105,10 +111,39 @@
                 eventSource.close();
             };
         }
+        // system prompt 업로드
+        function uploadPromptFile() {
+            let formData = new FormData();
+            let promptFileInput = document.getElementById("promptFileInput"); // id 변경
+            formData.append("prompt_file", promptFileInput.files[0]);
+
+            fetch('/upload_prompt', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert("Prompt 파일 업로드 오류: " + data.error);
+                } else {
+                    document.getElementById("system_prompt").value = data.prompt;
+                    alert(data.message);
+                }
+            })
+            .catch(error => alert("Prompt 파일 업로드 오류: " + error));
+        }
+
+        // system prompt 다운로드
+        function downloadPromptFile() {
+            const systemPrompt = document.getElementById("system_prompt").value;
+            // encodeURIComponent 불필요 (이미 텍스트)
+            window.location.href = `/download_prompt?prompt_content=${systemPrompt}`;
+        }
 
         document.getElementById("download-btn").addEventListener("click", function() {
             window.location.href = "/download";
         });
     </script>
+    <input type="file" id="promptFileInput" accept=".txt" style="display: none;">
 </body>
 </html>
