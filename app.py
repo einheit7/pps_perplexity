@@ -9,7 +9,7 @@ import requests
 import logging
 import time
 import threading
-from queue import Queue
+from queue import Queue, Empty  # Empty 추가
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"  # Flash 메시지용
@@ -28,8 +28,6 @@ class QueueHandler(logging.Handler):
 handler = QueueHandler(log_queue)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
-
-# app.logger 대신 root logger 사용
 root_logger = logging.getLogger()
 root_logger.addHandler(handler)
 root_logger.setLevel(logging.INFO)
@@ -52,7 +50,7 @@ def process_price(price_str):
     price_str = re.sub(r"[^0-9,]", "", price_str)
     try:
         price_int = int(price_str.replace(",", ""))
-        if "VAT 별도" in price_str.lower() or "(별도)" in price_str.lower():  # 소문자 변환
+        if "VAT 별도" in price_str.lower() or "(별도)" in price_str.lower():
             price_int = int(price_int * 1.1)
         return price_int
     except ValueError:
@@ -85,7 +83,7 @@ def search_price_api(product_name, system_prompt, model="sonar"):
         data = response.json()
         content_str = data["choices"][0]["message"]["content"]
 
-        content_str = clean_json_response(content_str) #  Perplexity 모델 응답에 따라 주석처리/해제
+        content_str = clean_json_response(content_str)  # 주석 해제/처리. Perplexity 응답 형식에 따라.
         try:
             content_json = json.loads(content_str)
             content_json["highest_price"] = process_price(content_json.get("highest_price"))
@@ -116,8 +114,9 @@ def background_search(file_path, output_filename, system_prompt, model):
         results = []
         total_products = len(products)
         for i, product in enumerate(products):
-            root_logger.info(f"[{i+1}/{total_products}] {product} 가격 검색 중...")  # 로깅
+            root_logger.info(f"[{i+1}/{total_products}] {product} 가격 검색 시작...")  # API 호출 전 로그
             price_data = search_price_api(product, system_prompt, model)
+            root_logger.info(f"[{i+1}/{total_products}] {product} 가격 검색 완료.")  # API 호출 후 로그
             price_data["product_name"] = product
             results.append(price_data)
 
@@ -165,7 +164,6 @@ def index():
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
-    # ... (이전 코드와 동일) ...
     if "file" not in request.files:
         return jsonify({"message": "파일이 없습니다."}), 400
     file = request.files["file"]
@@ -182,7 +180,6 @@ def upload_file():
 
 @app.route("/search", methods=["POST"])
 def start_search():
-    # ... (이전 코드와 동일) ...
     file_path = request.form.get("file_path")
     output_filename = request.form.get("output_filename", "price_results.xlsx")
     if not output_filename.endswith((".xlsx", ".xls")):
@@ -203,15 +200,17 @@ def start_search():
 def stream_logs():
     def generate():
         while True:
-            message = log_queue.get()  # 큐에서 메시지 가져오기
-            yield f"data: {message}\n\n"
-            time.sleep(0.5) # 폴링 간격
+            try:
+                message = log_queue.get(timeout=1)  # 큐에서 메시지 가져오기 (1초 타임아웃)
+                yield f"data: {message}\n\n"
+            except Empty:  # 큐가 비어있는 경우
+                yield f"data: \n\n" # 빈 data event를 보내서 연결 유지
+            # time.sleep(0.5) # 짧게 변경
 
     return Response(generate(), mimetype='text/event-stream')
 
 @app.route("/download")
 def download_file():
-     # ... (이전 코드와 동일) ...
     global result_file
     if result_file:
         response =  send_file(result_file, download_name="price_results.xlsx", as_attachment=True)
@@ -223,6 +222,7 @@ def download_file():
 
 @app.route('/upload_prompt', methods=['POST'])
 def upload_prompt():
+    # ... (이전 코드와 동일) ...
     if 'prompt_file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['prompt_file']
@@ -231,16 +231,15 @@ def upload_prompt():
     if file:
         try:
             prompt_content = file.read().decode('utf-8')  # 파일 내용 읽기
-            # 텍스트 영역에 prompt 내용 넣기
             return jsonify({'message': 'Prompt loaded successfully', 'prompt': prompt_content})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-
 @app.route('/download_prompt', methods=['GET'])
 def download_prompt():
+    # ... (이전 코드와 동일) ...
     try:
-        prompt_content = request.args.get('prompt_content') # 쿼리 파라미터
-        prompt_bytes = prompt_content.encode('utf-8')  # 바이트로 변환
+        prompt_content = request.args.get('prompt_content')
+        prompt_bytes = prompt_content.encode('utf-8')
         return send_file(
             BytesIO(prompt_bytes),
             as_attachment=True,
