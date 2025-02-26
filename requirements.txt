@@ -1,6 +1,6 @@
-Flask==2.2.2
-pandas==1.5.3
-openpyxl==3.0.10
-requests==2.28.1
-gunicorn==20.1.0
-Werkzeug==2.0.3
+Flask
+pandas
+openpyxl
+requests
+gunicorn
+Werkzeug
