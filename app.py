@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, send_file, redirect, flash, jsonify, Response
+from flask import Flask, request, render_template, send_file, jsonify, Response
 import pandas as pd
 import json
 import os
@@ -9,7 +9,7 @@ import requests
 import logging
 import time
 import threading
-from queue import Queue, Empty  # Empty 추가
+from queue import Queue, Empty
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"  # Flash 메시지용
@@ -37,10 +37,8 @@ def clean_json_response(response_str):
     response_str = response_str.strip()
     if response_str.startswith("```"):
         lines = response_str.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
+        if lines[0].startswith("```"): lines = lines[1:]
+        if lines and lines[-1].startswith("```"): lines = lines[:-1]
         response_str = "\n".join(lines).strip()
     return response_str
 
@@ -53,8 +51,7 @@ def process_price(price_str):
         if "VAT 별도" in price_str.lower() or "(별도)" in price_str.lower():
             price_int = int(price_int * 1.1)
         return price_int
-    except ValueError:
-        return None
+    except ValueError: return None
 
 # --- API 호출 함수 ---
 PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "your_api_key_here")
@@ -66,24 +63,15 @@ def search_price_api(product_name, system_prompt, model="sonar"):
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": f"Find the highest and lowest prices for '{product_name}' in Korean Won (KRW), including VAT."},
     ]
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": 0.7,
-    }
+    payload = { "model": model, "messages": messages, "temperature": 0.7 }
 
     try:
-        response = requests.post(
-            f"{API_BASE_URL}/chat/completions",
-            json=payload,
-            headers=headers,
-            timeout=15
-        )
+        response = requests.post(f"{API_BASE_URL}/chat/completions", json=payload, headers=headers, timeout=20) #timeout 늘림
         response.raise_for_status()
         data = response.json()
         content_str = data["choices"][0]["message"]["content"]
+        content_str = clean_json_response(content_str)  # Perplexity 응답 형식에 따라 주석처리/해제
 
-        content_str = clean_json_response(content_str)  # 주석 해제/처리. Perplexity 응답 형식에 따라.
         try:
             content_json = json.loads(content_str)
             content_json["highest_price"] = process_price(content_json.get("highest_price"))
@@ -92,7 +80,6 @@ def search_price_api(product_name, system_prompt, model="sonar"):
         except json.JSONDecodeError as e:
             root_logger.error(f"JSONDecodeError: {e}, Response: {content_str}")
             return _create_empty_result()
-
     except requests.exceptions.RequestException as e:
         root_logger.error(f"API 호출 오류: {e}")
         return _create_empty_result()
@@ -114,48 +101,40 @@ def background_search(file_path, output_filename, system_prompt, model):
         results = []
         total_products = len(products)
         for i, product in enumerate(products):
-            root_logger.info(f"[{i+1}/{total_products}] {product} 가격 검색 시작...")  # API 호출 전 로그
+            root_logger.info(f"[{i+1}/{total_products}] {product} 가격 검색 시작...")
             price_data = search_price_api(product, system_prompt, model)
-            root_logger.info(f"[{i+1}/{total_products}] {product} 가격 검색 완료.")  # API 호출 후 로그
+            root_logger.info(f"[{i+1}/{total_products}] {product} 가격 검색 완료.")
             price_data["product_name"] = product
             results.append(price_data)
 
-        # Excel 파일 생성 (이전 코드와 동일)
+        # Excel 파일 생성
         output = BytesIO()
         wb = Workbook()
         ws = wb.active
-        headers = [
-            "상품명", "highest_price", "highest_price_product", "highest_price_source",
-            "highest_price_url", "lowest_price", "lowest_price_product", "lowest_price_source", "lowest_price_url"
-        ]
+        headers = [ "상품명", "highest_price", "highest_price_product", "highest_price_source",
+            "highest_price_url", "lowest_price", "lowest_price_product", "lowest_price_source", "lowest_price_url" ]
         ws.append(headers)
         for res in results:
-            ws.append([
-                res.get("product_name"), res.get("highest_price"), res.get("highest_price_product"),
+            ws.append([ res.get("product_name"), res.get("highest_price"), res.get("highest_price_product"),
                 res.get("highest_price_source"), res.get("highest_price_url"), res.get("lowest_price"),
-                res.get("lowest_price_product"), res.get("lowest_price_source"), res.get("lowest_price_url")
-            ])
-
+                res.get("lowest_price_product"), res.get("lowest_price_source"), res.get("lowest_price_url") ])
         wb.save(output)
         output.seek(0)
 
         # 결과 파일 저장 (global 변수 사용)
         global result_file
         result_file = output
-
-        root_logger.info("가격 검색 완료.")
+        root_logger.info("가격 검색 완료.") # 완료 로그
 
     except Exception as e:
         root_logger.error(f"가격 검색 중 오류 발생: {e}")
     finally:
-        # 임시 파일 삭제
-        try:
-            os.remove(file_path)
-        except Exception as e:
-            root_logger.error(f"임시 파일 삭제 오류: {e}")
+        try: os.remove(file_path)
+        except Exception as e: root_logger.error(f"임시 파일 삭제 오류: {e}")
 
 # --- Flask 라우트 ---
-result_file = None
+result_file = None  # 결과 파일을 저장할 전역 변수, 초기화
+search_thread = None # 스레드 전역변수 추가
 
 @app.route("/", methods=["GET"])
 def index():
@@ -174,12 +153,14 @@ def upload_file():
 
     # 파일 저장 (임시 파일)
     file_path = os.path.join("./tmp", file.filename)
-    os.makedirs("./tmp", exist_ok=True)  # tmp 폴더 생성
+    os.makedirs("./tmp", exist_ok=True)
     file.save(file_path)
     return jsonify({"message": "파일 업로드 성공", "file_path": file_path})
 
 @app.route("/search", methods=["POST"])
 def start_search():
+    global search_thread  # 전역 변수 사용
+
     file_path = request.form.get("file_path")
     output_filename = request.form.get("output_filename", "price_results.xlsx")
     if not output_filename.endswith((".xlsx", ".xls")):
@@ -190,9 +171,13 @@ def start_search():
     if not file_path:
         return jsonify({"message": "파일 경로가 없습니다."}), 400
 
+    # 이미 실행 중인 스레드가 있으면 중지
+    if search_thread and search_thread.is_alive():
+        return jsonify({"message": "이미 검색이 진행 중입니다."}), 409  # 409 Conflict
+
     # 백그라운드 스레드에서 가격 검색 실행
-    thread = threading.Thread(target=background_search, args=(file_path, output_filename, system_prompt, model))
-    thread.start()
+    search_thread = threading.Thread(target=background_search, args=(file_path, output_filename, system_prompt, model))
+    search_thread.start()
 
     return jsonify({"message": "가격 검색 시작됨"})
 
@@ -201,11 +186,10 @@ def stream_logs():
     def generate():
         while True:
             try:
-                message = log_queue.get(timeout=1)  # 큐에서 메시지 가져오기 (1초 타임아웃)
+                message = log_queue.get(timeout=1) # 큐가 비어있을 때, 1초 기다림.
                 yield f"data: {message}\n\n"
-            except Empty:  # 큐가 비어있는 경우
-                yield f"data: \n\n" # 빈 data event를 보내서 연결 유지
-            # time.sleep(0.5) # 짧게 변경
+            except Empty:
+                yield f"data: \n\n"  # Keep-alive
 
     return Response(generate(), mimetype='text/event-stream')
 
@@ -213,16 +197,18 @@ def stream_logs():
 def download_file():
     global result_file
     if result_file:
-        response =  send_file(result_file, download_name="price_results.xlsx", as_attachment=True)
-        result_file = None
-        return response
+        response = send_file(result_file, download_name="price_results.xlsx", as_attachment=True)
 
+        # BytesIO 객체 닫고, 메모리 해제.
+        result_file.close()
+        result_file = None # 다운로드 후 초기화
+
+        return response
     else:
         return "No result file available", 404
 
 @app.route('/upload_prompt', methods=['POST'])
 def upload_prompt():
-    # ... (이전 코드와 동일) ...
     if 'prompt_file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['prompt_file']
@@ -230,13 +216,13 @@ def upload_prompt():
         return jsonify({'error': 'No selected file'}), 400
     if file:
         try:
-            prompt_content = file.read().decode('utf-8')  # 파일 내용 읽기
+            prompt_content = file.read().decode('utf-8')
             return jsonify({'message': 'Prompt loaded successfully', 'prompt': prompt_content})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
 @app.route('/download_prompt', methods=['GET'])
 def download_prompt():
-    # ... (이전 코드와 동일) ...
     try:
         prompt_content = request.args.get('prompt_content')
         prompt_bytes = prompt_content.encode('utf-8')
