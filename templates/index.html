@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <title>상품 가격 조사</title>
     <style>
-        body { font-family: sans-serif; }
+       /* ... (이전 스타일과 동일) ... */
+       body { font-family: sans-serif; }
         label { display: block; margin-bottom: 5px; }
         input[type="file"], input[type="text"], textarea, select { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
         button { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; margin-right: 5px; }
@@ -29,10 +30,11 @@
         </select><br>
 
         <label for="system_prompt">System Prompt:</label>
-        <textarea name="system_prompt" id="system_prompt" rows="5" cols="60"></textarea><br>
+        <textarea name="system_prompt" id="system_prompt" rows="5" cols="60">{{ default_system_prompt }}</textarea><br>
 
-        <!-- System Prompt 업로드/다운로드 버튼 -->
-        <button type="button" onclick="uploadPromptFile()">Prompt 파일 업로드</button>
+        <!-- System Prompt 업로드/다운로드 -->
+        <input type="file" id="promptFileInput" accept=".txt" style="display: none;">
+        <button type="button" onclick="document.getElementById('promptFileInput').click()">Prompt 파일 업로드</button>
         <button type="button" onclick="downloadPromptFile()">Prompt 파일 다운로드</button>
     </form>
 
@@ -46,7 +48,6 @@
         let filePath = null;
 
         function uploadFile() {
-            // ... (이전 코드와 동일) ...
             let formData = new FormData();
             let fileInput = document.getElementById("fileInput");
             formData.append("file", fileInput.files[0]);
@@ -58,14 +59,13 @@
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                filePath = data.file_path; // 서버에서 반환된 파일 경로 저장
+                filePath = data.file_path;
             })
             .catch(error => alert("오류 발생: " + error));
         }
 
         function startSearch() {
-            // ... (이전 코드와 동일) ...
-             if (!filePath) {
+            if (!filePath) {
                 alert("먼저 파일을 업로드해주세요.");
                 return;
             }
@@ -73,21 +73,17 @@
             const model = document.getElementById("model").value;
             const systemPrompt = document.getElementById("system_prompt").value;
 
-
             fetch('/search', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded', // 폼 데이터 형식
-
+                    'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: `file_path=${encodeURIComponent(filePath)}&output_filename=${encodeURIComponent(outputFilename)}&model=${encodeURIComponent(model)}&system_prompt=${encodeURIComponent(systemPrompt)}`,
-
-
             })
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                 document.getElementById("download-btn").style.display = "inline-block"; // 다운로드 버튼 표시
+                document.getElementById("download-btn").style.display = "inline-block";
             })
             .catch(error => alert("오류 발생: " + error));
 
@@ -95,7 +91,6 @@
         }
 
         function startLogStreaming() {
-            // ... (이전 코드와 동일) ...
             const logArea = document.getElementById("logArea");
             logArea.innerHTML = "검색 진행 중...\n";
 
@@ -111,10 +106,10 @@
                 eventSource.close();
             };
         }
-        // system prompt 업로드
+
         function uploadPromptFile() {
             let formData = new FormData();
-            let promptFileInput = document.getElementById("promptFileInput"); // id 변경
+            let promptFileInput = document.getElementById("promptFileInput");
             formData.append("prompt_file", promptFileInput.files[0]);
 
             fetch('/upload_prompt', {
@@ -133,10 +128,8 @@
             .catch(error => alert("Prompt 파일 업로드 오류: " + error));
         }
 
-        // system prompt 다운로드
         function downloadPromptFile() {
             const systemPrompt = document.getElementById("system_prompt").value;
-            // encodeURIComponent 불필요 (이미 텍스트)
             window.location.href = `/download_prompt?prompt_content=${systemPrompt}`;
         }
 
@@ -144,6 +137,5 @@
             window.location.href = "/download";
         });
     </script>
-    <input type="file" id="promptFileInput" accept=".txt" style="display: none;">
 </body>
 </html>
