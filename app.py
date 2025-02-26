@@ -69,7 +69,7 @@ def search_price_api(product_name, system_prompt, model="sonar"):
         data = response.json()
         content_str = data["choices"][0]["message"]["content"]
 
-        # content_str = clean_json_response(content_str) # Perplexity 모델에 따라 필요 여부 결정
+        content_str = clean_json_response(content_str) # Perplexity 모델에 따라 필요 여부 결정
         try:
             content_json = json.loads(content_str)
             content_json["highest_price"] = process_price(content_json.get("highest_price"))
