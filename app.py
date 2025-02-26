@@ -15,9 +15,9 @@ app = Flask(__name__)
 app.secret_key = "your_secret_key"  # Flash 메시지용
 
 # --- 로깅 설정 ---
-log_queue = Queue()  # 로그 메시지를 저장할 큐
+log_queue = Queue()
 
-class QueueHandler(logging.Handler):  # 큐를 사용하는 로깅 핸들러
+class QueueHandler(logging.Handler):
     def __init__(self, log_queue):
         super().__init__()
         self.log_queue = log_queue
@@ -25,17 +25,17 @@ class QueueHandler(logging.Handler):  # 큐를 사용하는 로깅 핸들러
     def emit(self, record):
         self.log_queue.put(self.format(record))
 
-# 기본 로거 설정
 handler = QueueHandler(log_queue)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
+
+# app.logger 대신 root logger 사용
 root_logger = logging.getLogger()
 root_logger.addHandler(handler)
-root_logger.setLevel(logging.INFO)  # root logger의 레벨을 INFO로
+root_logger.setLevel(logging.INFO)
 
 # --- 유틸리티 함수 ---
 def clean_json_response(response_str):
-    # ... (이전 코드와 동일) ...
     response_str = response_str.strip()
     if response_str.startswith("```"):
         lines = response_str.splitlines()
@@ -47,26 +47,22 @@ def clean_json_response(response_str):
     return response_str
 
 def process_price(price_str):
-   # ... (이전 코드와 동일) ...
-    if price_str is None:
-        return None
-    if isinstance(price_str, (int, float)):
-        return price_str
+    if price_str is None: return None
+    if isinstance(price_str, (int, float)): return price_str
     price_str = re.sub(r"[^0-9,]", "", price_str)
     try:
         price_int = int(price_str.replace(",", ""))
-        if "VAT 별도" in price_str or "(별도)" in price_str:
+        if "VAT 별도" in price_str.lower() or "(별도)" in price_str.lower():  # 소문자 변환
             price_int = int(price_int * 1.1)
         return price_int
     except ValueError:
         return None
 
 # --- API 호출 함수 ---
-PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "your_api_key_here") # 환경 변수에서 API키
+PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "your_api_key_here")
 API_BASE_URL = "https://api.perplexity.ai"
 
 def search_price_api(product_name, system_prompt, model="sonar"):
-    # ... (이전 코드와 동일) ...
     headers = {"Authorization": f"Bearer {PERPLEXITY_API_KEY}"}
     messages = [
         {"role": "system", "content": system_prompt},
@@ -79,46 +75,37 @@ def search_price_api(product_name, system_prompt, model="sonar"):
     }
 
     try:
-        # 실제 API 호출 (requests 사용)
         response = requests.post(
-            f"{API_BASE_URL}/chat/completions",  # 실제 엔드포인트로 변경
+            f"{API_BASE_URL}/chat/completions",
             json=payload,
             headers=headers,
-            timeout=15  # 적절한 타임아웃 설정
+            timeout=15
         )
-        response.raise_for_status()  # 200 OK가 아니면 예외 발생
+        response.raise_for_status()
         data = response.json()
         content_str = data["choices"][0]["message"]["content"]
 
-        content_str = clean_json_response(content_str)  # Perplexity 모델에 따라 필요 여부 결정
+        content_str = clean_json_response(content_str) #  Perplexity 모델 응답에 따라 주석처리/해제
         try:
             content_json = json.loads(content_str)
             content_json["highest_price"] = process_price(content_json.get("highest_price"))
             content_json["lowest_price"] = process_price(content_json.get("lowest_price"))
             return content_json
         except json.JSONDecodeError as e:
-             app.logger.error(f"JSONDecodeError: {e}, Response: {content_str}") # 로그 기록
-             return _create_empty_result() # 빈 결과 반환
-
+            root_logger.error(f"JSONDecodeError: {e}, Response: {content_str}")
+            return _create_empty_result()
 
     except requests.exceptions.RequestException as e:
-        app.logger.error(f"API 호출 오류: {e}") #  로그
+        root_logger.error(f"API 호출 오류: {e}")
+        return _create_empty_result()
+    except Exception as e:
+        root_logger.error(f"기타 오류: {e}")
         return _create_empty_result()
 
-    except Exception as e: # 기타 예외처리
-        app.logger.error(f"기타 오류: {e}")
-        return _create_empty_result()
 def _create_empty_result():
-    return {
-        "highest_price": None,
-        "highest_price_product": None,
-        "highest_price_source": None,
-        "highest_price_url": None,
-        "lowest_price": None,
-        "lowest_price_product": None,
-        "lowest_price_source": None,
-        "lowest_price_url": None,
-    }
+    return { "highest_price": None, "highest_price_product": None, "highest_price_source": None,
+            "highest_price_url": None, "lowest_price": None, "lowest_price_product": None,
+            "lowest_price_source": None, "lowest_price_url": None }
 
 # --- 백그라운드 작업 (가격 검색) ---
 def background_search(file_path, output_filename, system_prompt, model):
@@ -129,13 +116,12 @@ def background_search(file_path, output_filename, system_prompt, model):
         results = []
         total_products = len(products)
         for i, product in enumerate(products):
-            logging.info(f"[{i + 1}/{total_products}] {product} 가격 검색 중...")  # 로그 메시지
+            root_logger.info(f"[{i+1}/{total_products}] {product} 가격 검색 중...")  # 로깅
             price_data = search_price_api(product, system_prompt, model)
             price_data["product_name"] = product
             results.append(price_data)
-            # time.sleep(1) # 짧은 지연시간
 
-        # Excel 파일 생성
+        # Excel 파일 생성 (이전 코드와 동일)
         output = BytesIO()
         wb = Workbook()
         ws = wb.active
@@ -150,6 +136,7 @@ def background_search(file_path, output_filename, system_prompt, model):
                 res.get("highest_price_source"), res.get("highest_price_url"), res.get("lowest_price"),
                 res.get("lowest_price_product"), res.get("lowest_price_source"), res.get("lowest_price_url")
             ])
+
         wb.save(output)
         output.seek(0)
 
@@ -157,17 +144,19 @@ def background_search(file_path, output_filename, system_prompt, model):
         global result_file
         result_file = output
 
-        logging.info("가격 검색 완료.")
-
+        root_logger.info("가격 검색 완료.")
 
     except Exception as e:
-        logging.error(f"가격 검색 중 오류 발생: {e}")
+        root_logger.error(f"가격 검색 중 오류 발생: {e}")
     finally:
         # 임시 파일 삭제
-        os.remove(file_path)
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            root_logger.error(f"임시 파일 삭제 오류: {e}")
 
 # --- Flask 라우트 ---
-result_file = None  # 결과 파일을 저장할 전역 변수
+result_file = None
 
 @app.route("/", methods=["GET"])
 def index():
@@ -176,6 +165,7 @@ def index():
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
+    # ... (이전 코드와 동일) ...
     if "file" not in request.files:
         return jsonify({"message": "파일이 없습니다."}), 400
     file = request.files["file"]
@@ -192,6 +182,7 @@ def upload_file():
 
 @app.route("/search", methods=["POST"])
 def start_search():
+    # ... (이전 코드와 동일) ...
     file_path = request.form.get("file_path")
     output_filename = request.form.get("output_filename", "price_results.xlsx")
     if not output_filename.endswith((".xlsx", ".xls")):
@@ -212,23 +203,52 @@ def start_search():
 def stream_logs():
     def generate():
         while True:
-            # 큐에서 로그 메시지 가져오기
-            message = log_queue.get()
-            yield f"data: {message}\n\n"  # SSE 형식
+            message = log_queue.get()  # 큐에서 메시지 가져오기
+            yield f"data: {message}\n\n"
             time.sleep(0.5) # 폴링 간격
 
     return Response(generate(), mimetype='text/event-stream')
 
 @app.route("/download")
 def download_file():
+     # ... (이전 코드와 동일) ...
     global result_file
     if result_file:
         response =  send_file(result_file, download_name="price_results.xlsx", as_attachment=True)
-        result_file = None # 전역변수 초기화
+        result_file = None
         return response
 
     else:
         return "No result file available", 404
+
+@app.route('/upload_prompt', methods=['POST'])
+def upload_prompt():
+    if 'prompt_file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['prompt_file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    if file:
+        try:
+            prompt_content = file.read().decode('utf-8')  # 파일 내용 읽기
+            # 텍스트 영역에 prompt 내용 넣기
+            return jsonify({'message': 'Prompt loaded successfully', 'prompt': prompt_content})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+@app.route('/download_prompt', methods=['GET'])
+def download_prompt():
+    try:
+        prompt_content = request.args.get('prompt_content') # 쿼리 파라미터
+        prompt_bytes = prompt_content.encode('utf-8')  # 바이트로 변환
+        return send_file(
+            BytesIO(prompt_bytes),
+            as_attachment=True,
+            download_name="prompt.txt",
+            mimetype="text/plain"
+        )
+    except Exception as e:
+        return str(e), 500
 
 # --- 기본 System Prompt ---
 def get_default_system_prompt():
