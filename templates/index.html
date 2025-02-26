@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <title>상품 가격 조사</title>
     <style>
-       /* ... (이전 스타일과 동일) ... */
-       body { font-family: sans-serif; }
+        body { font-family: sans-serif; }
         label { display: block; margin-bottom: 5px; }
         input[type="file"], input[type="text"], textarea, select { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
         button { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; margin-right: 5px; }
@@ -18,34 +17,34 @@
     <form id="uploadForm" enctype="multipart/form-data">
         <label for="fileInput">엑셀 파일 업로드:</label>
         <input type="file" id="fileInput" accept=".xlsx, .xls" required>
-        <button type="button" onclick="uploadFile()">파일 업로드</button><br>
+        <!-- "파일 업로드" 버튼 제거 -->
 
         <label for="output_filename">출력 파일명:</label>
-        <input type="text" name="output_filename" id="output_filename" value="price_results.xlsx" required> <br>
+        <input type="text" name="output_filename" id="output_filename" value="price_results.xlsx" required>
 
         <label for="model">모델 선택:</label>
         <select name="model" id="model">
             <option value="sonar">sonar</option>
             <option value="sonar-pro">sonar-pro</option>
-        </select><br>
+        </select>
 
         <label for="system_prompt">System Prompt:</label>
-        <textarea name="system_prompt" id="system_prompt" rows="5" cols="60">{{ default_system_prompt }}</textarea><br>
+        <textarea name="system_prompt" id="system_prompt" rows="5" cols="60">{{ default_system_prompt }}</textarea>
 
         <!-- System Prompt 업로드/다운로드 -->
         <input type="file" id="promptFileInput" accept=".txt" style="display: none;">
         <button type="button" onclick="document.getElementById('promptFileInput').click()">Prompt 파일 업로드</button>
         <button type="button" onclick="downloadPromptFile()">Prompt 파일 다운로드</button>
+        <button type="button" onclick="startSearch()">조사 시작</button>
+        <button id="download-btn" style="display: none;">결과 파일 다운로드</button>
     </form>
-
-    <button type="button" onclick="startSearch()">조사 시작</button>
-    <button id="download-btn" style="display: none;">결과 파일 다운로드</button>
 
     <h2>진행 상황</h2>
     <pre id="logArea"></pre>
 
     <script>
         let filePath = null;
+        let searchInProgress = false; // 검색 진행 상태 변수
 
         function uploadFile() {
             let formData = new FormData();
@@ -58,10 +57,13 @@
             })
             .then(response => response.json())
             .then(data => {
-                alert(data.message);
+                console.log(data.message); // 메시지 확인
                 filePath = data.file_path;
+                // 파일 업로드 성공 후, 조사 시작 버튼 활성화
+                document.getElementById("startSearchBtn").disabled = false;
+
             })
-            .catch(error => alert("오류 발생: " + error));
+            .catch(error => console.error("오류 발생: ", error));
         }
 
         function startSearch() {
@@ -69,9 +71,16 @@
                 alert("먼저 파일을 업로드해주세요.");
                 return;
             }
+            // 중복 클릭 방지
+            if (searchInProgress) {
+                alert("이미 검색이 진행 중입니다.");
+                return;
+            }
+
             const outputFilename = document.getElementById("output_filename").value;
             const model = document.getElementById("model").value;
             const systemPrompt = document.getElementById("system_prompt").value;
+
 
             fetch('/search', {
                 method: 'POST',
@@ -82,13 +91,15 @@
             })
             .then(response => response.json())
             .then(data => {
-                alert(data.message);
+                console.log(data.message); // 메시지 확인
+                searchInProgress = true; // 검색 시작
                 document.getElementById("download-btn").style.display = "inline-block";
             })
-            .catch(error => alert("오류 발생: " + error));
+            .catch(error => console.error("오류 발생: ", error));
 
             startLogStreaming();
         }
+
 
         function startLogStreaming() {
             const logArea = document.getElementById("logArea");
@@ -108,6 +119,7 @@
         }
 
         function uploadPromptFile() {
+            // ... (이전 코드와 동일) ...
             let formData = new FormData();
             let promptFileInput = document.getElementById("promptFileInput");
             formData.append("prompt_file", promptFileInput.files[0]);
@@ -129,9 +141,14 @@
         }
 
         function downloadPromptFile() {
+            // ... (이전 코드와 동일) ...
             const systemPrompt = document.getElementById("system_prompt").value;
             window.location.href = `/download_prompt?prompt_content=${systemPrompt}`;
         }
+
+        // 파일 선택 시 자동 업로드
+        document.getElementById("fileInput").addEventListener("change", uploadFile);
+
 
         document.getElementById("download-btn").addEventListener("click", function() {
             window.location.href = "/download";
