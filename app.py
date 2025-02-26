@@ -124,7 +124,7 @@ def index():
         '  "lowest_price": 999,\n'
         '  "lowest_price_product": "Example Product 2",\n'
         '  "lowest_price_source": "Example Source 2",\n'
-        '  "lowest_price_url": "https://www.example.com/2"\n"
+        '  "lowest_price_url": "https://www.example.com/2",\n"
         "}\n"
         "```\n"
         "**END JSON ONLY INSTRUCTION**"
