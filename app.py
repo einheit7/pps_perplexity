@@ -147,7 +147,8 @@ def index():
         wb.save(output)
         output.seek(0)
         
-        return send_file(output, attachment_filename=output_filename, as_attachment=True)
+#        return send_file(output, attachment_filename=output_filename, as_attachment=True)
+        return send_file(output, download_name=output_filename, as_attachment=True)
     
     return render_template("index.html")
 
